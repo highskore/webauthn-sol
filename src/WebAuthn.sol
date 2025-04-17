@@ -11,9 +11,6 @@ import {LibString} from "solady/utils/LibString.sol";
 /// @notice A library for verifying WebAuthn Authentication Assertions, built off the work
 ///         of Daimo.
 ///
-/// @dev Attempts to use the RIP-7212 precompile for signature verification.
-///      If precompile verification fails, it falls back to FreshCryptoLib.
-///
 /// @author Coinbase (https://github.com/base-org/webauthn-sol)
 /// @author Daimo (https://github.com/daimo-eth/p256-verifier/blob/master/src/WebAuthn.sol)
 library WebAuthn {
@@ -100,9 +97,10 @@ library WebAuthn {
     /// @param webAuthnAuth The `WebAuthnAuth` struct.
     /// @param x            The x coordinate of the public key.
     /// @param y            The y coordinate of the public key.
+    /// @param usePrecompile A boolean indicating whether to use the precompile for signature verification.
     ///
     /// @return `true` if the authentication assertion passed validation, else `false`.
-    function verify(bytes memory challenge, bool requireUV, WebAuthnAuth memory webAuthnAuth, uint256 x, uint256 y)
+    function verify(bytes memory challenge, bool requireUV, WebAuthnAuth memory webAuthnAuth, uint256 x, uint256 y, bool usePrecompile)
         internal
         view
         returns (bool)
@@ -149,16 +147,23 @@ library WebAuthn {
         //     and hash.
         bytes32 messageHash = sha256(abi.encodePacked(webAuthnAuth.authenticatorData, clientDataJSONHash));
         bytes memory args = abi.encode(messageHash, webAuthnAuth.r, webAuthnAuth.s, x, y);
-        // try the RIP-7212 precompile address
-        (bool success, bytes memory ret) = _VERIFIER.staticcall(args);
-        // staticcall will not revert if address has no code
-        // check return length
-        // note that even if precompile exists, ret.length is 0 when verification returns false
-        // so an invalid signature will be checked twice: once by the precompile and once by FCL.
-        // Ideally this signature failure is simulated offchain and no one actually pay this gas.
-        bool valid = ret.length > 0;
-        if (success && valid) return abi.decode(ret, (uint256)) == 1;
 
-        return FCL_ecdsa.ecdsa_verify(messageHash, webAuthnAuth.r, webAuthnAuth.s, x, y);
+        // if precompile is not used, we can skip the staticcall
+        if (!usePrecompile) {
+            return FCL_ecdsa.ecdsa_verify(messageHash, webAuthnAuth.r, webAuthnAuth.s, x, y);
+        }
+        // Otherwise try using the precompile and fallback to FCL_ecdsa if needed
+        else {
+            // try the RIP-7212 precompile address
+            (bool success, bytes memory ret) = _VERIFIER.staticcall(args);
+            // staticcall will not revert if address has no code
+            // check return length
+            // note that even if precompile exists, ret.length is 0 when verification returns false
+            // so an invalid signature will be checked twice: once by the precompile and once by FCL.
+            // Ideally this signature failure is simulated offchain and no one actually pay this gas.
+            if (success && ret.length != 0) return abi.decode(ret, (uint256)) == 1;
+
+            return FCL_ecdsa.ecdsa_verify(messageHash, webAuthnAuth.r, webAuthnAuth.s, x, y);
+        }
     }
 }

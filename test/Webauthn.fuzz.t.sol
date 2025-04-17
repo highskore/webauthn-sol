@@ -37,7 +37,7 @@ contract WebAuthnFuzzTest is Test {
                 webAuthnAuth.s = FCL_ecdsa.n - webAuthnAuth.s;
             }
 
-            bool res = WebAuthn.verify({challenge: challenge, requireUV: uv, webAuthnAuth: webAuthnAuth, x: x, y: y});
+            bool res = WebAuthn.verify({challenge: challenge, requireUV: uv, webAuthnAuth: webAuthnAuth, x: x, y: y, usePrecompile: false});
 
             // Assert the verification failed to guard against signature malleability.
             assertEq(res, false, string.concat("Failed on ", jsonCaseSelector));
@@ -70,7 +70,7 @@ contract WebAuthnFuzzTest is Test {
             // Unset the `up` flag.
             webAuthnAuth.authenticatorData[32] = webAuthnAuth.authenticatorData[32] & bytes1(0xfe);
 
-            bool res = WebAuthn.verify({challenge: challenge, requireUV: uv, webAuthnAuth: webAuthnAuth, x: x, y: y});
+            bool res = WebAuthn.verify({challenge: challenge, requireUV: uv, webAuthnAuth: webAuthnAuth, x: x, y: y, usePrecompile: false});
 
             // Assert the verification failed because the `up` flag was not set.
             assertEq(res, false, string.concat("Failed on ", jsonCaseSelector));
@@ -111,7 +111,8 @@ contract WebAuthnFuzzTest is Test {
                 requireUV: true, // Set UV to required to ensure false is returned
                 webAuthnAuth: webAuthnAuth,
                 x: x,
-                y: y
+                y: y,
+                usePrecompile: false
             });
 
             // Assert the verification failed because user verification was required but not performed by the
@@ -145,7 +146,7 @@ contract WebAuthnFuzzTest is Test {
 
             webAuthnAuth.s = Utils.normalizeS(webAuthnAuth.s);
 
-            bool res = WebAuthn.verify({challenge: challenge, requireUV: uv, webAuthnAuth: webAuthnAuth, x: x, y: y});
+            bool res = WebAuthn.verify({challenge: challenge, requireUV: uv, webAuthnAuth: webAuthnAuth, x: x, y: y, usePrecompile: false});
 
             // Assert the verification succeeded.
             assertEq(res, true, string.concat("Failed on ", jsonCaseSelector));
