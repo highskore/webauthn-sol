@@ -148,21 +148,18 @@ library WebAuthn {
         bytes32 messageHash = sha256(abi.encodePacked(webAuthnAuth.authenticatorData, clientDataJSONHash));
         bytes memory args = abi.encode(messageHash, webAuthnAuth.r, webAuthnAuth.s, x, y);
 
-        // if precompile is not used, we can skip the staticcall
-        if (!usePrecompile) {
-            return FCL_ecdsa.ecdsa_verify(messageHash, webAuthnAuth.r, webAuthnAuth.s, x, y);
-        }
-        // Otherwise try using the precompile and fallback to FCL_ecdsa if needed
-        else {
-            // try the RIP-7212 precompile address
+        // Call the precompile to verify the signature if usePrecompile is set
+        if (usePrecompile) {
+            // call the RIP-7212 precompile address
             (bool success, bytes memory ret) = _VERIFIER.staticcall(args);
             // staticcall will not revert if address has no code
             // check return length
             // note that even if precompile exists, ret.length is 0 when verification returns false
-            // so an invalid signature will be checked twice: once by the precompile and once by FCL.
-            // Ideally this signature failure is simulated offchain and no one actually pay this gas.
             if (success && ret.length != 0) return abi.decode(ret, (uint256)) == 1;
-
+            else return false;
+        }
+        // Otherwise use FCL_ecdsa to verify the signature
+        else {
             return FCL_ecdsa.ecdsa_verify(messageHash, webAuthnAuth.r, webAuthnAuth.s, x, y);
         }
     }
